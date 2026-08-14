@@ -41,13 +41,6 @@ jobs:
         \
             ndkVersion = "29.0.14206865"' ${{ github.workspace }}/V2rayNG/app/build.gradle.kts
 
-    - name: Add debug applicationIdSuffix
-      run: |
-        sed -i '/buildTypes {/a\        debug {\n            applicationIdSuffix = ".debug"\n        }' \
-          ${{ github.workspace }}/V2rayNG/app/build.gradle.kts
-        echo "=== buildTypes after patch ==="
-        sed -n '/buildTypes {/,/}/p' ${{ github.workspace }}/V2rayNG/app/build.gradle.kts
-
     - name: Restore cached libhevtun
       id: cache-libhevtun-restore
       uses: actions/cache/restore@v6
@@ -93,40 +86,55 @@ jobs:
         distribution: 'temurin'
         java-version: '21'
 
-    - name: Build Debug APK
+    - name: Decode Keystore
+      uses: timheuer/base64-to-file@v2.0.0
+      id: android_keystore
+      with:
+        fileName: "android_keystore.jks"
+        encodedString: ${{ secrets.APP_KEYSTORE_BASE64 }}
+
+    - name: Build APK
       run: |
         cd ${{ github.workspace }}/V2rayNG
         echo "sdk.dir=${ANDROID_HOME}" > local.properties
         chmod 755 gradlew
-        ./gradlew assembleDebug
-
+        ./gradlew licenseFdroidReleaseReport
+        ./gradlew assembleRelease -Pandroid.injected.signing.store.file=${{ steps.android_keystore.outputs.filePath }} -Pandroid.injected.signing.store.password=${{ secrets.APP_KEYSTORE_PASSWORD }} -Pandroid.injected.signing.key.alias=${{ secrets.APP_KEYSTORE_ALIAS }} -Pandroid.injected.signing.key.password=${{ secrets.APP_KEY_PASSWORD }}
+    
     - name: Upload arm64-v8a APK
       uses: actions/upload-artifact@v7
-      if: ${{ success() }}
+      if: ${{  success() }}
       with:
-        name: arm64-v8a-debug
-        path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/debug/*arm64-v8a*.apk
+        name: arm64-v8a
+        path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*arm64-v8a*.apk
 
     - name: Upload armeabi-v7a APK
       uses: actions/upload-artifact@v7
-      if: ${{ success() }}
+      if: ${{  success() }}
       with:
-        name: armeabi-v7a-debug
-        path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/debug/*armeabi-v7a*.apk
+        name: armeabi-v7a
+        path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*armeabi-v7a*.apk
 
     - name: Upload x86 APK
       uses: actions/upload-artifact@v7
-      if: ${{ success() }}
+      if: ${{  success() }}
       with:
-        name: x86-apk-debug
-        path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/debug/*x86*.apk
+        name: x86-apk
+        path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*x86*.apk
 
     - name: Upload universal APK
       uses: actions/upload-artifact@v7
       if: ${{ success() }}
       with:
-        name: universal-apk-debug
-        path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/debug/*universal*.apk
+        name: universal-apk
+        path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*universal*.apk
+
+    - name: Upload mapping file
+      uses: actions/upload-artifact@v7
+      if: ${{ success() }}
+      with:
+        name: mapping
+        path: ${{ github.workspace }}/V2rayNG/app/build/outputs/mapping/*/release/mapping.txt
 
   sign-and-release:
     needs: build
