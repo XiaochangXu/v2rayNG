@@ -133,6 +133,8 @@ jobs:
     needs: build
     runs-on: ubuntu-26.04
     if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+    env:
+      HAS_GPG_KEY: ${{ secrets.GPG_PRIVATE_KEY != '' }}
 
     steps:
       - name: Download APK artifacts
@@ -141,6 +143,7 @@ jobs:
           path: release
 
       - name: Sign APK files
+        if: env.HAS_GPG_KEY == 'true'
         run: |
           printf '%s' "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
           KEY=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr:/ {print $10; exit}')
@@ -154,6 +157,7 @@ jobs:
           gpg --armor --export "$KEY" > release-files/v2rayN-public-key.asc
 
       - name: Upload APKs, signatures and public key to release
+        if: env.HAS_GPG_KEY == 'true'
         uses: svenstaro/upload-release-action@v2
         with:
           file: release-files/*
